@@ -1,0 +1,1726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meeting Topics Manager</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #fafafa;
+      color: #333;
+      line-height: 1.6;
+    }
+
+    .app {
+      display: flex;
+      height: 100vh;
+    }
+
+    .sidebar {
+      width: 300px;
+      background: #fff;
+      border-right: 1px solid #e0e0e0;
+      overflow-y: auto;
+      padding: 20px;
+    }
+
+    .sidebar h2 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .meeting-item {
+      padding: 12px;
+      margin-bottom: 8px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+
+    .meeting-item:hover {
+      background: #f5f5f5;
+    }
+
+    .meeting-item.selected {
+      background: #f0f0f0;
+      border-color: #999;
+    }
+
+    .meeting-item.past {
+      opacity: 0.5;
+    }
+
+    .meeting-date {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+
+    .meeting-time {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .meeting-edit-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s, background 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+      border-radius: 6px;
+    }
+
+    .meeting-item:hover .meeting-edit-btn {
+      opacity: 1;
+    }
+
+    .meeting-edit-btn:hover {
+      background: #e8e8e8;
+    }
+
+    .past-meetings-toggle {
+      padding: 12px;
+      margin-top: 16px;
+      margin-bottom: 8px;
+      background: #fafafa;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: #666;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: background 0.2s;
+    }
+
+    .past-meetings-toggle:hover {
+      background: #f0f0f0;
+    }
+
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 40px;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .header-title-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .header-title-row:hover .header-edit-btn {
+      opacity: 1;
+    }
+
+    .header h1 {
+      font-size: 24px;
+      font-weight: 600;
+    }
+
+    .header-edit-btn {
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: #666;
+      opacity: 0;
+      transition: opacity 0.2s, background 0.2s;
+      border-radius: 6px;
+    }
+
+    .header-edit-btn:hover {
+      background: #e8e8e8;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    button {
+      padding: 10px 20px;
+      background: #333;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: #555;
+    }
+
+    button.secondary {
+      background: #fff;
+      color: #333;
+      border: 1px solid #e0e0e0;
+    }
+
+    button.secondary:hover {
+      background: #f5f5f5;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal {
+      background: #fff;
+      padding: 32px;
+      border-radius: 12px;
+      max-width: 600px;
+      width: 90%;
+      overflow: visible;
+      position: relative;
+    }
+
+    .modal h2 {
+      font-size: 20px;
+      margin-bottom: 24px;
+      font-weight: 700;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 6px;
+      color: #555;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: none !important;
+      border-color: #333 !important;
+      box-shadow: 0 0 0 3px rgba(51, 51, 51, 0.1) !important;
+    }
+
+    select {
+      padding-right: 36px;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 4L6 8L10 4' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+    }
+
+    select:focus {
+      outline: none !important;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      margin-top: 24px;
+    }
+
+    .topic-card {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      position: relative;
+    }
+
+    .topic-card:hover .topic-delete-btn {
+      opacity: 1 !important;
+    }
+
+    .topic-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .topic-meta {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      background: #f5f5f5;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .topic-description {
+      color: #555;
+      margin-bottom: 12px;
+      white-space: pre-wrap;
+    }
+
+    .file-links {
+      font-size: 13px;
+    }
+
+    .file-links a {
+      color: #333;
+      text-decoration: underline;
+      margin-right: 12px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #999;
+    }
+
+    .file-link-input {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .file-link-input input {
+      flex: 1;
+    }
+
+    .file-link-input button {
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+
+    .datetime-inputs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    // Topic types with priority order
+    const TOPIC_TYPES = {
+      QUESTION: { label: 'Question', priority: 4 },
+      GET_FEEDBACK: { label: 'Get Feedback', priority: 3 },
+      PURE_SHARING: { label: 'Sharing', priority: 2 },
+      DISCUSSION: { label: 'Discussion', priority: 1 }
+    };
+
+    const URGENCY_LEVELS = [
+      { value: 5, label: 'Critical' },
+      { value: 4, label: 'High' },
+      { value: 3, label: 'Medium' },
+      { value: 2, label: 'Low' }
+    ];
+
+    // Generate all meetings for 2026
+    // Generate meetings based on settings
+    function generateMeetingsFromSettings() {
+      const savedSettings = JSON.parse(localStorage.getItem('meetingSettings') || '{}');
+      
+      const startDateStr = savedSettings.startDate || '2026-01-08T00:00:00-08:00';
+      const endDateStr = savedSettings.endDate || '2026-12-31T00:00:00-08:00';
+      const daysOfWeek = savedSettings.daysOfWeek || [4];
+      const frequency = savedSettings.frequency || 'weekly';
+      const interval = savedSettings.interval || 1;
+      
+      const startHour = savedSettings.startHour || 1;
+      const startMinute = savedSettings.startMinute || 0;
+      const startAmPm = savedSettings.startAmPm || 'PM';
+      const endHour = savedSettings.endHour || 1;
+      const endMinute = savedSettings.endMinute || 45;
+      const endAmPm = savedSettings.endAmPm || 'PM';
+      
+      const start24Hour = startAmPm === 'PM' && startHour !== 12 ? startHour + 12 : (startAmPm === 'AM' && startHour === 12 ? 0 : startHour);
+      const end24Hour = endAmPm === 'PM' && endHour !== 12 ? endHour + 12 : (endAmPm === 'AM' && endHour === 12 ? 0 : endHour);
+      
+      const startDate = new Date(startDateStr);
+      const endDate = new Date(endDateStr);
+      const meetings = [];
+      
+      const dstStart = new Date('2026-03-08T02:00:00');
+      const dstEnd = new Date('2026-11-01T02:00:00');
+      
+      if (frequency === 'weekly') {
+        daysOfWeek.forEach(targetDay => {
+          let currentDate = new Date(startDate);
+          
+          while (currentDate.getDay() !== targetDay) {
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+          
+          while (currentDate <= endDate) {
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth() + 1;
+            const day = currentDate.getDate();
+            
+            const isDST = currentDate >= dstStart && currentDate < dstEnd;
+            const tzOffset = isDST ? '-07:00' : '-08:00';
+            
+            const startStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(start24Hour).padStart(2, '0')}:${String(startMinute).padStart(2, '0')}:00${tzOffset}`;
+            const endStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(end24Hour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}:00${tzOffset}`;
+            
+            meetings.push({
+              id: crypto.randomUUID(),
+              startDateTime: startStr,
+              endDateTime: endStr
+            });
+            
+            currentDate.setDate(currentDate.getDate() + (7 * interval));
+          }
+        });
+      } else if (frequency === 'daily') {
+        let currentDate = new Date(startDate);
+        
+        while (currentDate <= endDate) {
+          const year = currentDate.getFullYear();
+          const month = currentDate.getMonth() + 1;
+          const day = currentDate.getDate();
+          
+          const isDST = currentDate >= dstStart && currentDate < dstEnd;
+          const tzOffset = isDST ? '-07:00' : '-08:00';
+          
+          const startStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(start24Hour).padStart(2, '0')}:${String(startMinute).padStart(2, '0')}:00${tzOffset}`;
+          const endStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(end24Hour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}:00${tzOffset}`;
+          
+          meetings.push({
+            id: crypto.randomUUID(),
+            startDateTime: startStr,
+            endDateTime: endStr
+          });
+          
+          currentDate.setDate(currentDate.getDate() + interval);
+        }
+      } else if (frequency === 'monthly') {
+        let currentDate = new Date(startDate);
+        const startDay = currentDate.getDate();
+        
+        while (currentDate <= endDate) {
+          const year = currentDate.getFullYear();
+          const month = currentDate.getMonth() + 1;
+          const day = currentDate.getDate();
+          
+          const isDST = currentDate >= dstStart && currentDate < dstEnd;
+          const tzOffset = isDST ? '-07:00' : '-08:00';
+          
+          const startStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(start24Hour).padStart(2, '0')}:${String(startMinute).padStart(2, '0')}:00${tzOffset}`;
+          const endStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(end24Hour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}:00${tzOffset}`;
+          
+          meetings.push({
+            id: crypto.randomUUID(),
+            startDateTime: startStr,
+            endDateTime: endStr
+          });
+          
+          currentDate.setMonth(currentDate.getMonth() + interval);
+          if (currentDate.getDate() !== startDay) {
+            currentDate.setDate(0);
+          }
+        }
+      }
+      
+      return meetings.sort((a, b) => new Date(a.startDateTime) - new Date(b.startDateTime));
+    }
+
+    // Legacy function for backward compatibility
+    function generateMeetingsFor2026() {
+      return generateMeetingsFromSettings();
+    }
+
+    // Fix meeting times to ensure 1:00-1:45 PM
+    function fixMeetingTimes(meetings) {
+      const dstStart = new Date('2026-03-08T02:00:00');
+      const dstEnd = new Date('2026-11-01T02:00:00');
+      
+      return meetings.map(meeting => {
+        const start = new Date(meeting.startDateTime);
+        const year = start.getFullYear();
+        const month = start.getMonth() + 1;
+        const day = start.getDate();
+        
+        const meetingDate = new Date(year, month - 1, day);
+        const isDST = meetingDate >= dstStart && meetingDate < dstEnd;
+        const tzOffset = isDST ? '-07:00' : '-08:00';
+        
+        return {
+          ...meeting,
+          startDateTime: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T13:00:00${tzOffset}`,
+          endDateTime: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T13:45:00${tzOffset}`
+        };
+      });
+    }
+
+    // Convert Date object to PST/PDT string
+    function dateToLocalString(date) {
+      const dstStart = new Date('2026-03-08T02:00:00');
+      const dstEnd = new Date('2026-11-01T02:00:00');
+      
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      const hours = date.getHours();
+      const minutes = date.getMinutes();
+      
+      const meetingDate = new Date(year, month - 1, day);
+      const isDST = meetingDate >= dstStart && meetingDate < dstEnd;
+      const tzOffset = isDST ? '-07:00' : '-08:00';
+      
+      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00${tzOffset}`;
+    }
+
+    // Strict deterministic sort
+    function sortTopics(topics) {
+      return [...topics].sort((a, b) => {
+        if (a.urgency !== b.urgency) return b.urgency - a.urgency;
+        
+        const aPriority = TOPIC_TYPES[a.type].priority;
+        const bPriority = TOPIC_TYPES[b.type].priority;
+        if (aPriority !== bPriority) return bPriority - aPriority;
+        
+        if (a.durationMinutes !== b.durationMinutes) return a.durationMinutes - b.durationMinutes;
+        
+        return new Date(a.createdAt) - new Date(b.createdAt);
+      });
+    }
+
+    function App() {
+      const [meetings, setMeetings] = useState(() => {
+        const stored = localStorage.getItem('meetings');
+        let loadedMeetings = stored ? JSON.parse(stored) : generateMeetingsFor2026();
+        
+        // Check if meetings need fixing by checking the time string directly
+        const needsFix = loadedMeetings.some(m => {
+          // Check if the time portion is "T13:00:00"
+          return !m.startDateTime.includes('T13:00:00');
+        });
+        
+        if (needsFix) {
+          loadedMeetings = fixMeetingTimes(loadedMeetings);
+          localStorage.setItem('meetings', JSON.stringify(loadedMeetings));
+        }
+        
+        return loadedMeetings;
+      });
+
+      const [topics, setTopics] = useState(() => {
+        const stored = localStorage.getItem('topics');
+        return stored ? JSON.parse(stored) : [];
+      });
+
+      const [selectedMeetingId, setSelectedMeetingId] = useState(null);
+      const [showTopicModal, setShowTopicModal] = useState(false);
+      const [showEditMeetingModal, setShowEditMeetingModal] = useState(false);
+      const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+      useEffect(() => {
+        localStorage.setItem('meetings', JSON.stringify(meetings));
+      }, [meetings]);
+
+      useEffect(() => {
+        localStorage.setItem('topics', JSON.stringify(topics));
+      }, [topics]);
+
+      useEffect(() => {
+        if (!selectedMeetingId && meetings.length > 0) {
+          const now = new Date();
+          const upcomingMeeting = meetings.find(m => new Date(m.startDateTime) >= now);
+          setSelectedMeetingId(upcomingMeeting ? upcomingMeeting.id : meetings[0].id);
+        }
+      }, [meetings, selectedMeetingId]);
+
+      const selectedMeeting = meetings.find(m => m.id === selectedMeetingId);
+      const sortedTopics = useMemo(() => {
+        const meetingTopics = topics.filter(t => t.meetingId === selectedMeetingId);
+        return sortTopics(meetingTopics);
+      }, [topics, selectedMeetingId]);
+
+      const addTopic = (topic) => {
+        setTopics([...topics, { 
+          ...topic, 
+          id: crypto.randomUUID(), 
+          createdAt: new Date().toISOString(),
+          meetingId: selectedMeetingId 
+        }]);
+      };
+
+      const deleteTopic = (topicId) => {
+        setTopics(topics.filter(t => t.id !== topicId));
+      };
+
+      const updateMeeting = (meetingId, updates) => {
+        setMeetings(meetings.map(m => m.id === meetingId ? { ...m, ...updates } : m));
+      };
+
+      return (
+        <div className="app">
+          <Sidebar 
+            meetings={meetings} 
+            selectedMeetingId={selectedMeetingId}
+            onSelectMeeting={setSelectedMeetingId}
+            onUpdateMeeting={updateMeeting}
+            onOpenSettings={() => setShowSettingsModal(true)}
+          />
+          <Main 
+            meeting={selectedMeeting}
+            topics={sortedTopics}
+            onAddTopic={() => setShowTopicModal(true)}
+            onEditMeeting={() => setShowEditMeetingModal(true)}
+            onDeleteTopic={deleteTopic}
+          />
+          {showTopicModal && (
+            <TopicModal 
+              onClose={() => setShowTopicModal(false)}
+              onSave={addTopic}
+            />
+          )}
+          {showEditMeetingModal && selectedMeeting && (
+            <EditMeetingModal
+              meeting={selectedMeeting}
+              onClose={() => setShowEditMeetingModal(false)}
+              onSave={(updates) => {
+                updateMeeting(selectedMeeting.id, updates);
+                setShowEditMeetingModal(false);
+              }}
+            />
+          )}
+          {showSettingsModal && (
+            <SettingsModal
+              onClose={() => setShowSettingsModal(false)}
+              onSave={(settings) => {
+                localStorage.setItem('meetingSettings', JSON.stringify(settings));
+                const newMeetings = generateMeetingsFromSettings();
+                setMeetings(newMeetings);
+                localStorage.setItem('meetings', JSON.stringify(newMeetings));
+                setShowSettingsModal(false);
+              }}
+            />
+          )}
+        </div>
+      );
+    }
+
+    function Sidebar({ meetings, selectedMeetingId, onSelectMeeting, onUpdateMeeting, onOpenSettings }) {
+      const now = new Date();
+      const [editingMeetingId, setEditingMeetingId] = React.useState(null);
+      const [showPastMeetings, setShowPastMeetings] = React.useState(false);
+
+      const savedSettings = JSON.parse(localStorage.getItem('meetingSettings') || '{}');
+      const seriesName = savedSettings.seriesName || 'Design Studio Forum';
+
+      const futureMeetings = meetings.filter(m => new Date(m.startDateTime) >= now);
+      const pastMeetings = meetings.filter(m => new Date(m.startDateTime) < now);
+
+      return (
+        <div className="sidebar">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <h2>{seriesName}</h2>
+            <button
+              onClick={() => onOpenSettings()}
+              title="Meeting settings"
+              style={{
+                width: '28px',
+                height: '28px',
+                padding: 0,
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                color: '#666',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '6px'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = '#e8e8e8'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+              </svg>
+            </button>
+          </div>
+          
+          {futureMeetings.map(meeting => {
+            const start = new Date(meeting.startDateTime);
+
+            return (
+              <div
+                key={meeting.id}
+                className={`meeting-item ${selectedMeetingId === meeting.id ? 'selected' : ''}`}
+                onClick={() => onSelectMeeting(meeting.id)}
+              >
+                <div className="meeting-date">
+                  {start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </div>
+                <div className="meeting-time">
+                  {start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' })} - 
+                  {new Date(meeting.endDateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' })}
+                </div>
+                <button 
+                  className="meeting-edit-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingMeetingId(meeting.id);
+                  }}
+                  title="Edit meeting time"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                  </svg>
+                </button>
+              </div>
+            );
+          })}
+
+          {pastMeetings.length > 0 && (
+            <>
+              <div 
+                className="past-meetings-toggle"
+                onClick={() => setShowPastMeetings(!showPastMeetings)}
+              >
+                <span>Past Meetings ({pastMeetings.length})</span>
+                <span style={{ fontSize: '12px' }}>{showPastMeetings ? '▲' : '▼'}</span>
+              </div>
+
+              {showPastMeetings && pastMeetings.map(meeting => {
+                const start = new Date(meeting.startDateTime);
+
+                return (
+                  <div
+                    key={meeting.id}
+                    className={`meeting-item past ${selectedMeetingId === meeting.id ? 'selected' : ''}`}
+                    onClick={() => onSelectMeeting(meeting.id)}
+                  >
+                    <div className="meeting-date">
+                      {start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </div>
+                    <div className="meeting-time">
+                      {start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' })} - 
+                      {new Date(meeting.endDateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' })}
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          {editingMeetingId && (
+            <EditMeetingModal
+              meeting={meetings.find(m => m.id === editingMeetingId)}
+              onClose={() => setEditingMeetingId(null)}
+              onSave={(updates) => {
+                onUpdateMeeting(editingMeetingId, updates);
+                setEditingMeetingId(null);
+              }}
+            />
+          )}
+        </div>
+      );
+    }
+
+    function Main({ meeting, topics, onAddTopic, onEditMeeting, onDeleteTopic }) {
+      const [isHeaderHovered, setIsHeaderHovered] = React.useState(false);
+
+      if (!meeting) {
+        return <div className="main"><div className="empty-state">Select a meeting</div></div>;
+      }
+
+      const start = new Date(meeting.startDateTime);
+      const isPast = start < new Date();
+
+      return (
+        <div className="main">
+          <div className="header">
+            <div 
+              className="header-title-row"
+              onMouseEnter={() => setIsHeaderHovered(true)}
+              onMouseLeave={() => setIsHeaderHovered(false)}
+            >
+              <h1>
+                {start.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+              </h1>
+              {!isPast && (
+                <button 
+                  className="header-edit-btn"
+                  onClick={onEditMeeting}
+                  title="Edit meeting time"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                  </svg>
+                </button>
+              )}
+            </div>
+            <div style={{ fontSize: '14px', color: '#666', marginBottom: '4px' }}>
+              {start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' })} - 
+              {new Date(meeting.endDateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' })}
+            </div>
+            {isPast && <div style={{ fontSize: '13px', color: '#999' }}>Past meeting</div>}
+            {!isPast && (
+              <div className="header-actions">
+                <button onClick={onAddTopic}>Add Topic</button>
+              </div>
+            )}
+          </div>
+
+          {topics.length === 0 ? (
+            <div className="empty-state">{isPast ? 'No topics.' : 'No topics yet. Add one to get started.'}</div>
+          ) : (
+            topics.map(topic => <TopicCard key={topic.id} topic={topic} onDelete={onDeleteTopic} isPast={isPast} />)
+          )}
+        </div>
+      );
+    }
+
+    function DeleteConfirmModal({ onClose, onConfirm, itemName }) {
+      return (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', padding: '32px', borderRadius: '12px', maxWidth: '400px', width: '90%' }}>
+            <h2 style={{ fontSize: '18px', marginBottom: '16px', fontWeight: 700 }}>Delete Topic</h2>
+            <p style={{ marginBottom: '24px', color: '#555', lineHeight: 1.5 }}>
+              Are you sure you want to delete this topic? This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button onClick={onClose} style={{ padding: '10px 20px', background: '#fff', color: '#333', border: '1px solid #e0e0e0', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>Cancel</button>
+              <button onClick={onConfirm} style={{ padding: '10px 20px', background: '#ff4444', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>Delete</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function TopicCard({ topic, onDelete, isPast }) {
+      const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+      const [isHovered, setIsHovered] = useState(false);
+      
+      return (
+        <>
+        <div 
+          className="topic-card"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          {!isPast && (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              title="Delete topic"
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                width: '24px',
+                height: '24px',
+                padding: 0,
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                color: '#666',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: isHovered ? 1 : 0,
+                transition: 'opacity 0.2s, background 0.2s',
+                borderRadius: '6px'
+              }}
+              className="topic-delete-btn"
+              onMouseEnter={(e) => e.currentTarget.style.background = '#e8e8e8'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+              </svg>
+            </button>
+          )}
+          <div className="topic-header">
+            <div style={{ flex: 1 }}>
+              <strong>{topic.presenterName}</strong>
+            </div>
+          </div>
+          <div className="topic-meta">
+            <span className="badge" style={{ 
+              background: topic.urgency === 5 ? '#FFE2E3' : topic.urgency === 4 ? '#FFEDDB' : topic.urgency === 3 ? '#EADFFF' : '#DFEDFF',
+              color: topic.urgency === 5 ? '#C90009' : topic.urgency === 4 ? '#AD5500' : topic.urgency === 3 ? '#4301C1' : '#0053C0',
+              border: 'none',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center'
+            }}>
+              {URGENCY_LEVELS.find(l => l.value === topic.urgency)?.label}
+            </span>
+            <span className="badge" style={{ display: 'inline-flex', alignItems: 'center' }}>{TOPIC_TYPES[topic.type].label}</span>
+            <span className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="#666">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 6v6l4 2" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+              {topic.durationMinutes} min
+            </span>
+          </div>
+          <div className="topic-description">{topic.description}</div>
+          {(topic.fileLink || (topic.fileLinks && topic.fileLinks.length > 0)) && (
+            <div className="file-links">
+              <strong>Link:</strong>{' '}
+              {topic.fileLink ? (
+                <a href={topic.fileLink} target="_blank" rel="noopener noreferrer">{topic.fileLink}</a>
+              ) : (
+                topic.fileLinks.map((link, i) => (
+                  <a key={i} href={link} target="_blank" rel="noopener noreferrer" style={{ marginRight: '12px' }}>{link}</a>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+        {showDeleteConfirm && (
+          <DeleteConfirmModal
+            onClose={() => setShowDeleteConfirm(false)}
+            onConfirm={() => {
+              onDelete(topic.id);
+              setShowDeleteConfirm(false);
+            }}
+            itemName={topic.presenterName}
+          />
+        )}
+        </>
+      );
+    }
+
+    function TopicModal({ onClose, onSave }) {
+      const [formData, setFormData] = useState({
+        presenterName: '',
+        type: 'QUESTION',
+        description: '',
+        durationMinutes: 5,
+        urgency: 3,
+        fileLink: ''
+      });
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        onSave(formData);
+        onClose();
+      };
+
+      return (
+        <div className="modal-overlay">
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h2>Add Topic</h2>
+            <form onSubmit={handleSubmit}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>Presenter Name *</label>
+                  <input
+                    required
+                    value={formData.presenterName}
+                    onChange={e => setFormData({ ...formData, presenterName: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>Type *</label>
+                  <select
+                    value={formData.type}
+                    onChange={e => setFormData({ ...formData, type: e.target.value })}
+                  >
+                    {Object.entries(TOPIC_TYPES).map(([key, { label }]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Description *</label>
+                <textarea
+                  required
+                  value={formData.description}
+                  onChange={e => setFormData({ ...formData, description: e.target.value })}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>Duration (minutes) *</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={formData.durationMinutes}
+                    onChange={e => setFormData({ ...formData, durationMinutes: parseInt(e.target.value) })}
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>Urgency *</label>
+                  <select
+                    value={formData.urgency}
+                    onChange={e => setFormData({ ...formData, urgency: parseInt(e.target.value) })}
+                  >
+                    {URGENCY_LEVELS.map(level => (
+                      <option key={level.value} value={level.value}>{level.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>File Link (optional)</label>
+                <input
+                  type="url"
+                  placeholder="https://..."
+                  value={formData.fileLink}
+                  onChange={e => setFormData({ ...formData, fileLink: e.target.value })}
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="secondary" onClick={onClose}>Cancel</button>
+                <button type="submit">Add Topic</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    function DateTimePicker({ value, onChange, onClose }) {
+      const [selectedDate, setSelectedDate] = useState(new Date(value));
+      const [currentMonth, setCurrentMonth] = useState(new Date(value));
+
+      const hours = Array.from({length: 12}, (_, i) => String(i + 1).padStart(2, '0'));
+      const minutes = Array.from({length: 60}, (_, i) => String(i).padStart(2, '0'));
+
+      const hour = selectedDate.getHours();
+      const minute = selectedDate.getMinutes();
+      const displayHour = hour % 12 || 12;
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+
+      const getDaysInMonth = (date) => {
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const daysInMonth = lastDay.getDate();
+        const startingDayOfWeek = firstDay.getDay();
+        
+        const days = [];
+        // Add previous month's trailing days
+        for (let i = 0; i < startingDayOfWeek; i++) {
+          const prevMonthDay = new Date(year, month, -startingDayOfWeek + i + 1);
+          days.push({ date: prevMonthDay, isCurrentMonth: false });
+        }
+        // Add current month's days
+        for (let i = 1; i <= daysInMonth; i++) {
+          days.push({ date: new Date(year, month, i), isCurrentMonth: true });
+        }
+        // Add next month's days to complete the last week only
+        const remainingDays = (7 - (days.length % 7)) % 7;
+        for (let i = 1; i <= remainingDays; i++) {
+          days.push({ date: new Date(year, month + 1, i), isCurrentMonth: false });
+        }
+        return days;
+      };
+
+      const days = getDaysInMonth(currentMonth);
+      const monthYear = currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+      const isSameDay = (date1, date2) => {
+        return date1.getDate() === date2.getDate() &&
+               date1.getMonth() === date2.getMonth() &&
+               date1.getFullYear() === date2.getFullYear();
+      };
+
+      const handleDateClick = (date) => {
+        const newDate = new Date(selectedDate);
+        newDate.setFullYear(date.getFullYear());
+        newDate.setMonth(date.getMonth());
+        newDate.setDate(date.getDate());
+        setSelectedDate(newDate);
+        onChange(newDate);
+      };
+
+      const handleTimeChange = (type, value) => {
+        const newDate = new Date(selectedDate);
+        if (type === 'hour') {
+          const numValue = parseInt(value);
+          const currentHour = newDate.getHours();
+          const isPM = currentHour >= 12;
+          const newHour = isPM ? (numValue === 12 ? 12 : numValue + 12) : (numValue === 12 ? 0 : numValue);
+          newDate.setHours(newHour);
+        } else if (type === 'minute') {
+          newDate.setMinutes(parseInt(value));
+        } else if (type === 'ampm') {
+          const currentHour = newDate.getHours();
+          if (value === 'AM' && currentHour >= 12) {
+            newDate.setHours(currentHour - 12);
+          } else if (value === 'PM' && currentHour < 12) {
+            newDate.setHours(currentHour + 12);
+          }
+        }
+        setSelectedDate(newDate);
+        onChange(newDate);
+      };
+
+      return (
+        <div style={{ background: '#fff', borderRadius: '12px', padding: '20px', width: '360px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <span style={{ fontSize: '16px', fontWeight: 600 }}>{monthYear}</span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button type="button" onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))} style={{ padding: '4px 8px', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '18px' }}>‹</button>
+                <button type="button" onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))} style={{ padding: '4px 8px', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '18px' }}>›</button>
+              </div>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', marginBottom: '8px' }}>
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                <div key={day} style={{ textAlign: 'center', fontSize: '12px', fontWeight: 500, color: '#999', padding: '4px' }}>{day}</div>
+              ))}
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
+              {days.map((day, i) => (
+                <button
+                  type="button"
+                  key={i}
+                  onClick={() => handleDateClick(day.date)}
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    padding: 0,
+                    background: isSameDay(day.date, selectedDate) ? '#333' : 'transparent',
+                    border: 'none',
+                    borderRadius: '50%',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    color: !day.isCurrentMonth ? '#ccc' : isSameDay(day.date, selectedDate) ? '#fff' : '#333',
+                    fontWeight: isSameDay(day.date, selectedDate) ? 600 : 400,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  {day.date.getDate()}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid #e0e0e0', paddingTop: '16px' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <select value={String(displayHour).padStart(2, '0')} onChange={(e) => handleTimeChange('hour', e.target.value)} style={{ padding: '8px 12px', paddingRight: '36px', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', flex: 1, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 4L6 8L10 4' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}>
+                {hours.map(h => <option key={h} value={h}>{h}</option>)}
+              </select>
+              <span style={{ fontSize: '18px', fontWeight: 600 }}>:</span>
+              <select value={String(minute).padStart(2, '0')} onChange={(e) => handleTimeChange('minute', e.target.value)} style={{ padding: '8px 12px', paddingRight: '36px', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', flex: 1, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 4L6 8L10 4' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}>
+                {minutes.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+              <select value={ampm} onChange={(e) => handleTimeChange('ampm', e.target.value)} style={{ padding: '8px 12px', paddingRight: '36px', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', flex: 1, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 4L6 8L10 4' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}>
+                <option value="AM">AM</option>
+                <option value="PM">PM</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+        function DateOnlyPicker({ value, onChange }) {
+      const [selectedDate, setSelectedDate] = useState(new Date(value));
+      const [currentMonth, setCurrentMonth] = useState(new Date(value));
+
+      const getDaysInMonth = (date) => {
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const daysInMonth = lastDay.getDate();
+        const startingDayOfWeek = firstDay.getDay();
+        
+        const days = [];
+        for (let i = 0; i < startingDayOfWeek; i++) {
+          const prevMonthDay = new Date(year, month, -startingDayOfWeek + i + 1);
+          days.push({ date: prevMonthDay, isCurrentMonth: false });
+        }
+        for (let i = 1; i <= daysInMonth; i++) {
+          days.push({ date: new Date(year, month, i), isCurrentMonth: true });
+        }
+        const remainingDays = (7 - (days.length % 7)) % 7;
+        for (let i = 1; i <= remainingDays; i++) {
+          days.push({ date: new Date(year, month + 1, i), isCurrentMonth: false });
+        }
+        return days;
+      };
+
+      const days = getDaysInMonth(currentMonth);
+      const monthYear = currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+      const isSameDay = (date1, date2) => {
+        return date1.getDate() === date2.getDate() &&
+               date1.getMonth() === date2.getMonth() &&
+               date1.getFullYear() === date2.getFullYear();
+      };
+
+      const handleDateClick = (date) => {
+        const newDate = new Date(date);
+        newDate.setHours(0, 0, 0, 0);
+        setSelectedDate(newDate);
+        onChange(newDate);
+        onClose();
+      };
+
+      return (
+        <div style={{ background: '#fff', borderRadius: '12px', padding: '20px', width: '360px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <span style={{ fontSize: '16px', fontWeight: 600 }}>{monthYear}</span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button type="button" onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))} style={{ padding: '4px 8px', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '18px' }}>‹</button>
+                <button type="button" onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))} style={{ padding: '4px 8px', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '18px' }}>›</button>
+              </div>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', marginBottom: '8px' }}>
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                <div key={day} style={{ textAlign: 'center', fontSize: '12px', fontWeight: 500, color: '#999', padding: '4px' }}>{day}</div>
+              ))}
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
+              {days.map((day, i) => (
+                <button
+                  type="button"
+                  key={i}
+                  onClick={() => handleDateClick(day.date)}
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    padding: 0,
+                    background: isSameDay(day.date, selectedDate) ? '#333' : 'transparent',
+                    border: 'none',
+                    borderRadius: '50%',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    color: !day.isCurrentMonth ? '#ccc' : isSameDay(day.date, selectedDate) ? '#fff' : '#333',
+                    fontWeight: isSameDay(day.date, selectedDate) ? 600 : 400,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  {day.date.getDate()}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+
+        function SettingsModal({ onClose, onSave }) {
+      const savedSettings = JSON.parse(localStorage.getItem('meetingSettings') || '{}');
+      
+      const [formData, setFormData] = useState({
+        seriesName: savedSettings.seriesName || 'Design Studio Forum',
+        startDate: savedSettings.startDate || '2026-01-08T00:00:00-08:00',
+        endDate: savedSettings.endDate || '2026-12-31T00:00:00-08:00',
+        daysOfWeek: savedSettings.daysOfWeek || [4], // Array for multi-select
+        startHour: savedSettings.startHour || 1,
+        startMinute: savedSettings.startMinute || 0,
+        startAmPm: savedSettings.startAmPm || 'PM',
+        endHour: savedSettings.endHour || 1,
+        endMinute: savedSettings.endMinute || 45,
+        endAmPm: savedSettings.endAmPm || 'PM',
+        frequency: savedSettings.frequency || 'weekly',
+        interval: savedSettings.interval || 1
+      });
+
+      const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+      const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        onSave(formData);
+      };
+
+      const toggleDayOfWeek = (day) => {
+        const currentDays = formData.daysOfWeek;
+        if (currentDays.includes(day)) {
+          setFormData({ ...formData, daysOfWeek: currentDays.filter(d => d !== day) });
+        } else {
+          setFormData({ ...formData, daysOfWeek: [...currentDays, day].sort() });
+        }
+      };
+
+      const formatDateOnly = (dateStr) => {
+        if (!dateStr) return 'Select date';
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/Los_Angeles' });
+      };
+
+      const getIntervalUnit = () => {
+        if (formData.frequency === 'daily') return 'day(s)';
+        if (formData.frequency === 'weekly') return 'week(s)';
+        if (formData.frequency === 'monthly') return 'month(s)';
+        return 'week(s)';
+      };
+
+      const hours = Array.from({length: 12}, (_, i) => String(i + 1).padStart(2, '0'));
+      const minutes = Array.from({length: 60}, (_, i) => String(i).padStart(2, '0'));
+      const daysOfWeek = [
+        { value: 0, label: 'S', full: 'Sunday' },
+        { value: 1, label: 'M', full: 'Monday' },
+        { value: 2, label: 'T', full: 'Tuesday' },
+        { value: 3, label: 'W', full: 'Wednesday' },
+        { value: 4, label: 'T', full: 'Thursday' },
+        { value: 5, label: 'F', full: 'Friday' },
+        { value: 6, label: 'S', full: 'Saturday' }
+      ];
+
+      return (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', padding: '40px', borderRadius: '12px', maxWidth: '600px', width: '90%', maxHeight: '90vh', overflowY: 'auto', overflowX: 'visible', position: 'relative' }}>
+            <h2 style={{ fontSize: '24px', marginBottom: '32px', fontWeight: 700 }}>Edit Meeting Series</h2>
+            <form onSubmit={handleSubmit}>
+              {/* Series Name */}
+              <div style={{ marginBottom: '32px' }}>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '8px', color: '#555' }}>Series Name</label>
+                <input 
+                  required 
+                  value={formData.seriesName} 
+                  onChange={e => setFormData({ ...formData, seriesName: e.target.value })} 
+                  style={{ width: '100%', padding: '12px', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', outline: 'none' }}
+                  onFocus={(e) => { e.target.style.borderColor = '#333'; e.target.style.boxShadow = '0 0 0 3px rgba(51, 51, 51, 0.1)'; }}
+                  onBlur={(e) => { e.target.style.borderColor = '#e0e0e0'; e.target.style.boxShadow = 'none'; }}
+                />
+              </div>
+
+              {/* DATE & TIME Section */}
+              <div style={{ marginBottom: '32px' }}>
+                <h3 style={{ fontSize: '12px', fontWeight: 600, color: '#999', letterSpacing: '0.5px', marginBottom: '16px' }}>DATE & TIME</h3>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                  <div style={{ position: 'relative' }}>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '8px', color: '#555' }}>Start Date</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowStartDatePicker(!showStartDatePicker);
+                        setShowEndDatePicker(false);
+                      }}
+                      style={{ width: '100%', padding: '12px', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', textAlign: 'left', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', outline: 'none', color: '#333' }}
+                      onFocus={(e) => { e.target.style.borderColor = '#333'; e.target.style.boxShadow = '0 0 0 3px rgba(51, 51, 51, 0.1)'; }}
+                      onBlur={(e) => { e.target.style.borderColor = '#e0e0e0'; e.target.style.boxShadow = 'none'; }}
+                    >
+                      <span style={{ flex: 1 }}>{formatDateOnly(formData.startDate)}</span>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="#666">
+                        <path d="M20 3h-1V1h-2v2H7V1H5v2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H4V8h16v13z"/>
+                      </svg>
+                    </button>
+                    {showStartDatePicker && (
+                      <>
+                        <div 
+                          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }}
+                          onClick={() => setShowStartDatePicker(false)}
+                        />
+                        <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 1001, marginTop: '8px' }}>
+                          <DateOnlyPicker
+                            value={formData.startDate}
+                            onChange={(date) => {
+                              setFormData({ ...formData, startDate: dateToLocalString(date) });
+                              setShowStartDatePicker(false);
+                            }}
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <div style={{ position: 'relative' }}>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '8px', color: '#555' }}>End Date</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowEndDatePicker(!showEndDatePicker);
+                        setShowStartDatePicker(false);
+                      }}
+                      style={{ width: '100%', padding: '12px', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', textAlign: 'left', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', outline: 'none', color: '#333' }}
+                      onFocus={(e) => { e.target.style.borderColor = '#333'; e.target.style.boxShadow = '0 0 0 3px rgba(51, 51, 51, 0.1)'; }}
+                      onBlur={(e) => { e.target.style.borderColor = '#e0e0e0'; e.target.style.boxShadow = 'none'; }}
+                    >
+                      <span style={{ flex: 1 }}>{formatDateOnly(formData.endDate)}</span>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="#666">
+                        <path d="M20 3h-1V1h-2v2H7V1H5v2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H4V8h16v13z"/>
+                      </svg>
+                    </button>
+                    {showEndDatePicker && (
+                      <>
+                        <div 
+                          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }}
+                          onClick={() => setShowEndDatePicker(false)}
+                        />
+                        <div style={{ position: 'absolute', top: '100%', right: 0, zIndex: 1001, marginTop: '8px' }}>
+                          <DateOnlyPicker
+                            value={formData.endDate}
+                            onChange={(date) => {
+                              setFormData({ ...formData, endDate: dateToLocalString(date) });
+                              setShowEndDatePicker(false);
+                            }}
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '8px', color: '#555' }}>Start Time</label>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      <select 
+                        value={String(formData.startHour).padStart(2, '0')} 
+                        onChange={e => setFormData({ ...formData, startHour: parseInt(e.target.value) })} 
+                        style={{ padding: '10px', paddingRight: '32px', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', flex: 1, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 4L6 8L10 4' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', outline: 'none' }}
+                        onFocus={(e) => { e.target.style.borderColor = '#333'; e.target.style.boxShadow = '0 0 0 3px rgba(51, 51, 51, 0.1)'; }}
+                        onBlur={(e) => { e.target.style.borderColor = '#e0e0e0'; e.target.style.boxShadow = 'none'; }}
+                      >
+                        {hours.map(h => <option key={h} value={h}>{h}</option>)}
+                      </select>
+                      <span style={{ fontSize: '16px', fontWeight: 600 }}>:</span>
+                      <select 
+                        value={String(formData.startMinute).padStart(2, '0')} 
+                        onChange={e => setFormData({ ...formData, startMinute: parseInt(e.target.value) })} 
+                        style={{ padding: '10px', paddingRight: '32px', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', flex: 1, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 4L6 8L10 4' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', outline: 'none' }}
+                        onFocus={(e) => { e.target.style.borderColor = '#333'; e.target.style.boxShadow = '0 0 0 3px rgba(51, 51, 51, 0.1)'; }}
+                        onBlur={(e) => { e.target.style.borderColor = '#e0e0e0'; e.target.style.boxShadow = 'none'; }}
+                      >
+                        {minutes.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                      <select 
+                        value={formData.startAmPm} 
+                        onChange={e => setFormData({ ...formData, startAmPm: e.target.value })} 
+                        style={{ padding: '10px', paddingRight: '32px', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', width: '85px', appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 4L6 8L10 4' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', outline: 'none' }}
+                        onFocus={(e) => { e.target.style.borderColor = '#333'; e.target.style.boxShadow = '0 0 0 3px rgba(51, 51, 51, 0.1)'; }}
+                        onBlur={(e) => { e.target.style.borderColor = '#e0e0e0'; e.target.style.boxShadow = 'none'; }}
+                      >
+                        <option value="AM">AM</option>
+                        <option value="PM">PM</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '8px', color: '#555' }}>End Time</label>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      <select 
+                        value={String(formData.endHour).padStart(2, '0')} 
+                        onChange={e => setFormData({ ...formData, endHour: parseInt(e.target.value) })} 
+                        style={{ padding: '10px', paddingRight: '32px', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', flex: 1, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 4L6 8L10 4' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', outline: 'none' }}
+                        onFocus={(e) => { e.target.style.borderColor = '#333'; e.target.style.boxShadow = '0 0 0 3px rgba(51, 51, 51, 0.1)'; }}
+                        onBlur={(e) => { e.target.style.borderColor = '#e0e0e0'; e.target.style.boxShadow = 'none'; }}
+                      >
+                        {hours.map(h => <option key={h} value={h}>{h}</option>)}
+                      </select>
+                      <span style={{ fontSize: '16px', fontWeight: 600 }}>:</span>
+                      <select 
+                        value={String(formData.endMinute).padStart(2, '0')} 
+                        onChange={e => setFormData({ ...formData, endMinute: parseInt(e.target.value) })} 
+                        style={{ padding: '10px', paddingRight: '32px', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', flex: 1, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 4L6 8L10 4' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', outline: 'none' }}
+                        onFocus={(e) => { e.target.style.borderColor = '#333'; e.target.style.boxShadow = '0 0 0 3px rgba(51, 51, 51, 0.1)'; }}
+                        onBlur={(e) => { e.target.style.borderColor = '#e0e0e0'; e.target.style.boxShadow = 'none'; }}
+                      >
+                        {minutes.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                      <select 
+                        value={formData.endAmPm} 
+                        onChange={e => setFormData({ ...formData, endAmPm: e.target.value })} 
+                        style={{ padding: '10px', paddingRight: '32px', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', width: '85px', appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 4L6 8L10 4' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', outline: 'none' }}
+                        onFocus={(e) => { e.target.style.borderColor = '#333'; e.target.style.boxShadow = '0 0 0 3px rgba(51, 51, 51, 0.1)'; }}
+                        onBlur={(e) => { e.target.style.borderColor = '#e0e0e0'; e.target.style.boxShadow = 'none'; }}
+                      >
+                        <option value="AM">AM</option>
+                        <option value="PM">PM</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* RECURRENCE PATTERN Section */}
+              <div style={{ marginBottom: '32px' }}>
+                <h3 style={{ fontSize: '12px', fontWeight: 600, color: '#999', letterSpacing: '0.5px', marginBottom: '16px' }}>RECURRENCE PATTERN</h3>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '8px', color: '#555' }}>Repeat</label>
+                    <select 
+                      value={formData.frequency} 
+                      onChange={e => setFormData({ ...formData, frequency: e.target.value })} 
+                      style={{ width: '100%', padding: '12px', paddingRight: '36px', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 4L6 8L10 4' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', outline: 'none' }}
+                      onFocus={(e) => { e.target.style.borderColor = '#333'; e.target.style.boxShadow = '0 0 0 3px rgba(51, 51, 51, 0.1)'; }}
+                      onBlur={(e) => { e.target.style.borderColor = '#e0e0e0'; e.target.style.boxShadow = 'none'; }}
+                    >
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '8px', color: '#555' }}>Every</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <input 
+                        type="number" 
+                        min="1" 
+                        value={formData.interval} 
+                        onChange={e => setFormData({ ...formData, interval: parseInt(e.target.value) })} 
+                        style={{ width: '60px', padding: '12px', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', outline: 'none', textAlign: 'center' }}
+                        onFocus={(e) => { e.target.style.borderColor = '#333'; e.target.style.boxShadow = '0 0 0 3px rgba(51, 51, 51, 0.1)'; }}
+                        onBlur={(e) => { e.target.style.borderColor = '#e0e0e0'; e.target.style.boxShadow = 'none'; }}
+                      />
+                      <span style={{ fontSize: '14px', color: '#999' }}>{getIntervalUnit()}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {formData.frequency === 'weekly' && (
+                  <div>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '8px', color: '#555' }}>Repeats On</label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {daysOfWeek.map(day => (
+                        <button
+                          key={day.value}
+                          type="button"
+                          onClick={() => toggleDayOfWeek(day.value)}
+                          title={day.full}
+                          style={{
+                            width: '48px',
+                            height: '48px',
+                            padding: 0,
+                            background: formData.daysOfWeek.includes(day.value) ? '#333' : '#fff',
+                            color: formData.daysOfWeek.includes(day.value) ? '#fff' : '#666',
+                            border: '1px solid #e0e0e0',
+                            borderRadius: '50%',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!formData.daysOfWeek.includes(day.value)) {
+                              e.currentTarget.style.background = '#f5f5f5';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!formData.daysOfWeek.includes(day.value)) {
+                              e.currentTarget.style.background = '#fff';
+                            }
+                          }}
+                        >
+                          {day.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '32px' }}>
+                <button type="button" onClick={onClose} style={{ padding: '12px 24px', background: '#fff', color: '#333', border: '1px solid #e0e0e0', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>Cancel</button>
+                <button type="submit" style={{ padding: '12px 24px', background: '#333', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+
+
+    function EditMeetingModal({ meeting, onClose, onSave }) {
+      const [startDateTime, setStartDateTime] = useState(meeting.startDateTime);
+      const [endDateTime, setEndDateTime] = useState(meeting.endDateTime);
+      const [showStartPicker, setShowStartPicker] = useState(false);
+      const [showEndPicker, setShowEndPicker] = useState(false);
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        onSave({
+          startDateTime: startDateTime,
+          endDateTime: endDateTime
+        });
+      };
+
+      const formatDateTime = (dateStr) => {
+        if (!dateStr) return 'Select date & time';
+        try {
+          const date = new Date(dateStr);
+          if (isNaN(date.getTime())) return 'Select date & time';
+          
+          const month = date.toLocaleDateString('en-US', { month: 'short', timeZone: 'America/Los_Angeles' });
+          const day = date.toLocaleDateString('en-US', { day: 'numeric', timeZone: 'America/Los_Angeles' });
+          const year = date.toLocaleDateString('en-US', { year: 'numeric', timeZone: 'America/Los_Angeles' });
+          const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' });
+          
+          return `${month} ${day}, ${year}, ${time}`;
+        } catch (e) {
+          return 'Select date & time';
+        }
+      };
+
+      return (
+        <div className="modal-overlay">
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h2>Edit Meeting Time</h2>
+            <form onSubmit={handleSubmit}>
+              <div className="datetime-inputs">
+                <div className="form-group" style={{ position: 'relative' }}>
+                  <label>Start Date & Time</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowStartPicker(!showStartPicker);
+                      setShowEndPicker(false);
+                    }}
+                    style={{ width: '100%', padding: '10px', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', textAlign: 'left', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#333' }}
+                  >
+                    <span style={{ flex: 1, color: '#333', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatDateTime(startDateTime)}</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#666">
+                      <path d="M20 3h-1V1h-2v2H7V1H5v2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H4V8h16v13z"/>
+                    </svg>
+                  </button>
+                  {showStartPicker && (
+                    <>
+                      <div 
+                        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }}
+                        onClick={() => setShowStartPicker(false)}
+                      />
+                      <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 1001, marginTop: '8px' }}>
+                        <DateTimePicker
+                          value={startDateTime}
+                          onChange={(date) => {
+                            setStartDateTime(dateToLocalString(date));
+                          }}
+                          onClose={() => setShowStartPicker(false)}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="form-group" style={{ position: 'relative' }}>
+                  <label>End Date & Time</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEndPicker(!showEndPicker);
+                      setShowStartPicker(false);
+                    }}
+                    style={{ width: '100%', padding: '10px', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', textAlign: 'left', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#333' }}
+                  >
+                    <span style={{ flex: 1, color: '#333', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatDateTime(endDateTime)}</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#666">
+                      <path d="M20 3h-1V1h-2v2H7V1H5v2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H4V8h16v13z"/>
+                    </svg>
+                  </button>
+                  {showEndPicker && (
+                    <>
+                      <div 
+                        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }}
+                        onClick={() => setShowEndPicker(false)}
+                      />
+                      <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 1001, marginTop: '8px' }}>
+                        <DateTimePicker
+                          value={endDateTime}
+                          onChange={(date) => {
+                            setEndDateTime(dateToLocalString(date));
+                          }}
+                          onClose={() => setShowEndPicker(false)}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="secondary" onClick={onClose}>Cancel</button>
+                <button type="submit">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
