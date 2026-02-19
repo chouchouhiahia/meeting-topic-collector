@@ -387,6 +387,134 @@
 
     const { useState, useEffect, useMemo } = React;
 
+    // Password Protection Component
+    function PasswordProtection({ onAuthenticated }) {
+      const [passcode, setPasscode] = useState('');
+      const [error, setError] = useState('');
+      const [savedPasscode, setSavedPasscode] = useState(null);
+      const [isLoading, setIsLoading] = useState(true);
+      const [showPassword, setShowPassword] = useState(false);
+
+      useEffect(() => {
+        // Load passcode from Firestore
+        db.collection('settings').doc('passcode').get().then(doc => {
+          if (doc.exists && doc.data().value) {
+            setSavedPasscode(doc.data().value);
+          } else {
+            // No passcode set, create default one
+            const defaultPasscode = 'designstudio2026';
+            db.collection('settings').doc('passcode').set({ value: defaultPasscode });
+            setSavedPasscode(defaultPasscode);
+          }
+          setIsLoading(false);
+        });
+      }, []);
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        if (passcode === savedPasscode) {
+          sessionStorage.setItem('authenticated', 'true');
+          onAuthenticated();
+        } else {
+          setError('Incorrect passcode');
+          setPasscode('');
+        }
+      };
+
+      if (isLoading) {
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#fafafa' }}>
+            <div style={{ fontSize: '16px', color: '#666' }}>Loading...</div>
+          </div>
+        );
+      }
+
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#fafafa' }}>
+          <div style={{ background: '#fff', padding: '48px', borderRadius: '12px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', maxWidth: '400px', width: '90%' }}>
+            <h1 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '8px', textAlign: 'center' }}>Design Studio Forum</h1>
+            <p style={{ fontSize: '14px', color: '#666', marginBottom: '32px', textAlign: 'center' }}>Enter passcode to continue</p>
+            
+            <form onSubmit={handleSubmit}>
+              <div style={{ marginBottom: '24px' }}>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={passcode}
+                    onChange={(e) => setPasscode(e.target.value)}
+                    placeholder="Enter passcode"
+                    autoFocus
+                    style={{
+                      width: '100%',
+                      padding: '14px',
+                      paddingRight: '48px',
+                      border: '1px solid #e0e0e0',
+                      borderRadius: '8px',
+                      fontSize: '16px',
+                      outline: 'none'
+                    }}
+                    onFocus={(e) => { e.target.style.borderColor = '#333'; e.target.style.boxShadow = '0 0 0 3px rgba(51, 51, 51, 0.1)'; }}
+                    onBlur={(e) => { e.target.style.borderColor = '#e0e0e0'; e.target.style.boxShadow = 'none'; }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#666'
+                    }}
+                  >
+                    {showPassword ? (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46A11.804 11.804 0 0 0 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/>
+                      </svg>
+                    ) : (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                      </svg>
+                    )}
+                  </button>
+                </div>
+                {error && (
+                  <div style={{ color: '#ff4444', fontSize: '13px', marginTop: '8px', textAlign: 'center' }}>{error}</div>
+                )}
+              </div>
+              
+              <button
+                type="submit"
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  background: '#333',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={(e) => { e.target.style.background = '#555'; }}
+                onMouseLeave={(e) => { e.target.style.background = '#333'; }}
+              >
+                Enter
+              </button>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+
     // Topic types with priority order
     const TOPIC_TYPES = {
       QUESTION: { label: 'Question', priority: 4 },
@@ -587,7 +715,7 @@
       });
     }
 
-    function App() {
+    function MainApp() {
       const [meetings, setMeetings] = useState([]);
       const [topics, setTopics] = useState([]);
       const [selectedMeetingId, setSelectedMeetingId] = useState(null);
@@ -766,6 +894,12 @@
                   
                   // Save settings to Firestore first
                   await db.collection('settings').doc('meetingSettings').set(settings);
+                  
+                  // Update passcode if provided
+                  if (settings.newPasscode && settings.newPasscode.trim()) {
+                    await db.collection('settings').doc('passcode').set({ value: settings.newPasscode.trim() });
+                    console.log('Passcode updated');
+                  }
                   
                   // Generate new meetings FIRST (before deleting old ones)
                   const newMeetings = generateMeetingsFromSettings(settings);
@@ -1789,6 +1923,27 @@
                 )}
               </div>
 
+              {/* PASSCODE SECTION */}
+              <div style={{ marginTop: '32px', marginBottom: '32px', paddingTop: '24px', borderTop: '1px solid #e0e0e0' }}>
+                <h3 style={{ fontSize: '12px', fontWeight: 600, color: '#999', letterSpacing: '0.5px', marginBottom: '16px' }}>SECURITY</h3>
+                
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '8px', color: '#555' }}>Change Passcode (optional)</label>
+                  <input
+                    type="text"
+                    placeholder="Enter new passcode"
+                    value={formData.newPasscode || ''}
+                    onChange={e => setFormData({ ...formData, newPasscode: e.target.value })}
+                    style={{ width: '100%', padding: '12px', border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', outline: 'none' }}
+                    onFocus={(e) => { e.target.style.borderColor = '#333'; e.target.style.boxShadow = '0 0 0 3px rgba(51, 51, 51, 0.1)'; }}
+                    onBlur={(e) => { e.target.style.borderColor = '#e0e0e0'; e.target.style.boxShadow = 'none'; }}
+                  />
+                  <div style={{ fontSize: '12px', color: '#999', marginTop: '6px' }}>
+                    Leave blank to keep current passcode
+                  </div>
+                </div>
+              </div>
+
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '32px' }}>
                 <button type="button" onClick={onClose} disabled={isSaving} style={{ padding: '12px 24px', background: '#fff', color: '#333', border: '1px solid #e0e0e0', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>Cancel</button>
                 <button type="submit" disabled={isSaving} style={{ padding: '12px 24px', background: '#333', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>
@@ -1931,6 +2086,24 @@
           </div>
         </div>
       );
+    }
+
+    // Main App wrapper with authentication
+    function App() {
+      const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+      useEffect(() => {
+        // Check if already authenticated in this session
+        if (sessionStorage.getItem('authenticated') === 'true') {
+          setIsAuthenticated(true);
+        }
+      }, []);
+
+      if (!isAuthenticated) {
+        return <PasswordProtection onAuthenticated={() => setIsAuthenticated(true)} />;
+      }
+
+      return <MainApp />;
     }
 
     ReactDOM.render(<App />, document.getElementById('root'));
