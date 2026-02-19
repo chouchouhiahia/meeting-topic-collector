@@ -7,6 +7,11 @@
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  
   <style>
     * {
       box-sizing: border-box;
@@ -366,6 +371,20 @@
   <div id="root"></div>
 
   <script type="text/babel">
+    // Initialize Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyCV-zChKyxbTIS5WTU6uUwJ-GjRNjO0MmU",
+      authDomain: "meeting-topic-collector.firebaseapp.com",
+      projectId: "meeting-topic-collector",
+      storageBucket: "meeting-topic-collector.firebasestorage.app",
+      messagingSenderId: "540138164282",
+      appId: "1:540138164282:web:9626184576a0ed4d63a503"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
     const { useState, useEffect, useMemo } = React;
 
     // Topic types with priority order
@@ -385,9 +404,7 @@
 
     // Generate all meetings for 2026
     // Generate meetings based on settings
-    function generateMeetingsFromSettings() {
-      const savedSettings = JSON.parse(localStorage.getItem('meetingSettings') || '{}');
-      
+    function generateMeetingsFromSettings(savedSettings = {}) {
       const startDateStr = savedSettings.startDate || '2026-01-08T00:00:00-08:00';
       const endDateStr = savedSettings.endDate || '2026-12-31T00:00:00-08:00';
       const daysOfWeek = savedSettings.daysOfWeek || [4];
@@ -554,41 +571,48 @@
     }
 
     function App() {
-      const [meetings, setMeetings] = useState(() => {
-        const stored = localStorage.getItem('meetings');
-        let loadedMeetings = stored ? JSON.parse(stored) : generateMeetingsFor2026();
-        
-        // Check if meetings need fixing by checking the time string directly
-        const needsFix = loadedMeetings.some(m => {
-          // Check if the time portion is "T13:00:00"
-          return !m.startDateTime.includes('T13:00:00');
-        });
-        
-        if (needsFix) {
-          loadedMeetings = fixMeetingTimes(loadedMeetings);
-          localStorage.setItem('meetings', JSON.stringify(loadedMeetings));
-        }
-        
-        return loadedMeetings;
-      });
-
-      const [topics, setTopics] = useState(() => {
-        const stored = localStorage.getItem('topics');
-        return stored ? JSON.parse(stored) : [];
-      });
-
+      const [meetings, setMeetings] = useState([]);
+      const [topics, setTopics] = useState([]);
       const [selectedMeetingId, setSelectedMeetingId] = useState(null);
       const [showTopicModal, setShowTopicModal] = useState(false);
       const [showEditMeetingModal, setShowEditMeetingModal] = useState(false);
       const [showSettingsModal, setShowSettingsModal] = useState(false);
+      const [isLoading, setIsLoading] = useState(true);
 
+      // Load meetings from Firestore on mount
       useEffect(() => {
-        localStorage.setItem('meetings', JSON.stringify(meetings));
-      }, [meetings]);
+        const unsubscribe = db.collection('meetings').onSnapshot(snapshot => {
+          if (snapshot.empty) {
+            // No meetings in database, generate defaults
+            const defaultMeetings = generateMeetingsFor2026();
+            defaultMeetings.forEach(meeting => {
+              db.collection('meetings').add(meeting);
+            });
+          } else {
+            const loadedMeetings = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
+            setMeetings(loadedMeetings.sort((a, b) => new Date(a.startDateTime) - new Date(b.startDateTime)));
+            setIsLoading(false);
+          }
+        });
+        
+        return () => unsubscribe();
+      }, []);
 
+      // Load topics from Firestore on mount
       useEffect(() => {
-        localStorage.setItem('topics', JSON.stringify(topics));
-      }, [topics]);
+        const unsubscribe = db.collection('topics').onSnapshot(snapshot => {
+          const loadedTopics = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          setTopics(loadedTopics);
+        });
+        
+        return () => unsubscribe();
+      }, []);
 
       useEffect(() => {
         if (!selectedMeetingId && meetings.length > 0) {
@@ -604,22 +628,30 @@
         return sortTopics(meetingTopics);
       }, [topics, selectedMeetingId]);
 
-      const addTopic = (topic) => {
-        setTopics([...topics, { 
+      const addTopic = async (topic) => {
+        const newTopic = { 
           ...topic, 
-          id: crypto.randomUUID(), 
           createdAt: new Date().toISOString(),
           meetingId: selectedMeetingId 
-        }]);
+        };
+        await db.collection('topics').add(newTopic);
       };
 
-      const deleteTopic = (topicId) => {
-        setTopics(topics.filter(t => t.id !== topicId));
+      const deleteTopic = async (topicId) => {
+        await db.collection('topics').doc(topicId).delete();
       };
 
-      const updateMeeting = (meetingId, updates) => {
-        setMeetings(meetings.map(m => m.id === meetingId ? { ...m, ...updates } : m));
+      const updateMeeting = async (meetingId, updates) => {
+        await db.collection('meetings').doc(meetingId).update(updates);
       };
+
+      if (isLoading) {
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontSize: '18px', color: '#666' }}>
+            Loading meetings...
+          </div>
+        );
+      }
 
       return (
         <div className="app">
@@ -656,11 +688,27 @@
           {showSettingsModal && (
             <SettingsModal
               onClose={() => setShowSettingsModal(false)}
-              onSave={(settings) => {
-                localStorage.setItem('meetingSettings', JSON.stringify(settings));
-                const newMeetings = generateMeetingsFromSettings();
-                setMeetings(newMeetings);
-                localStorage.setItem('meetings', JSON.stringify(newMeetings));
+              onSave={async (settings) => {
+                // Save settings to Firestore
+                await db.collection('settings').doc('meetingSettings').set(settings);
+                
+                // Delete all existing meetings
+                const meetingsSnapshot = await db.collection('meetings').get();
+                const batch = db.batch();
+                meetingsSnapshot.docs.forEach(doc => {
+                  batch.delete(doc.ref);
+                });
+                await batch.commit();
+                
+                // Generate and save new meetings
+                const newMeetings = generateMeetingsFromSettings(settings);
+                const addBatch = db.batch();
+                newMeetings.forEach(meeting => {
+                  const docRef = db.collection('meetings').doc();
+                  addBatch.set(docRef, meeting);
+                });
+                await addBatch.commit();
+                
                 setShowSettingsModal(false);
               }}
             />
@@ -673,9 +721,16 @@
       const now = new Date();
       const [editingMeetingId, setEditingMeetingId] = React.useState(null);
       const [showPastMeetings, setShowPastMeetings] = React.useState(false);
+      const [seriesName, setSeriesName] = React.useState('Design Studio Forum');
 
-      const savedSettings = JSON.parse(localStorage.getItem('meetingSettings') || '{}');
-      const seriesName = savedSettings.seriesName || 'Design Studio Forum';
+      // Load series name from Firestore
+      React.useEffect(() => {
+        db.collection('settings').doc('meetingSettings').get().then(doc => {
+          if (doc.exists) {
+            setSeriesName(doc.data().seriesName || 'Design Studio Forum');
+          }
+        });
+      }, []);
 
       const futureMeetings = meetings.filter(m => new Date(m.startDateTime) >= now);
       const pastMeetings = meetings.filter(m => new Date(m.startDateTime) < now);
@@ -1287,22 +1342,32 @@
 
 
         function SettingsModal({ onClose, onSave }) {
-      const savedSettings = JSON.parse(localStorage.getItem('meetingSettings') || '{}');
-      
       const [formData, setFormData] = useState({
-        seriesName: savedSettings.seriesName || 'Design Studio Forum',
-        startDate: savedSettings.startDate || '2026-01-08T00:00:00-08:00',
-        endDate: savedSettings.endDate || '2026-12-31T00:00:00-08:00',
-        daysOfWeek: savedSettings.daysOfWeek || [4], // Array for multi-select
-        startHour: savedSettings.startHour || 1,
-        startMinute: savedSettings.startMinute || 0,
-        startAmPm: savedSettings.startAmPm || 'PM',
-        endHour: savedSettings.endHour || 1,
-        endMinute: savedSettings.endMinute || 45,
-        endAmPm: savedSettings.endAmPm || 'PM',
-        frequency: savedSettings.frequency || 'weekly',
-        interval: savedSettings.interval || 1
+        seriesName: 'Design Studio Forum',
+        startDate: '2026-01-08T00:00:00-08:00',
+        endDate: '2026-12-31T00:00:00-08:00',
+        daysOfWeek: [4],
+        startHour: 1,
+        startMinute: 0,
+        startAmPm: 'PM',
+        endHour: 1,
+        endMinute: 45,
+        endAmPm: 'PM',
+        frequency: 'weekly',
+        interval: 1
       });
+
+      // Load settings from Firestore
+      useEffect(() => {
+        db.collection('settings').doc('meetingSettings').get().then(doc => {
+          if (doc.exists) {
+            setFormData(prevData => ({
+              ...prevData,
+              ...doc.data()
+            }));
+          }
+        });
+      }, []);
 
       const [showStartDatePicker, setShowStartDatePicker] = useState(false);
       const [showEndDatePicker, setShowEndDatePicker] = useState(false);
