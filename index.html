@@ -506,7 +506,24 @@
         }
       }
       
-      return meetings.sort((a, b) => new Date(a.startDateTime) - new Date(b.startDateTime));
+      // Remove any duplicate dates - check full datetime string
+      const uniqueMeetings = [];
+      const seenDateTimes = new Set();
+      
+      meetings.forEach(meeting => {
+        // Create unique key from start date and time
+        const dateTimeKey = meeting.startDateTime;
+        if (!seenDateTimes.has(dateTimeKey)) {
+          seenDateTimes.add(dateTimeKey);
+          uniqueMeetings.push(meeting);
+        } else {
+          console.log('Duplicate found and removed:', dateTimeKey);
+        }
+      });
+      
+      console.log('Total meetings before dedup:', meetings.length, 'After dedup:', uniqueMeetings.length);
+      
+      return uniqueMeetings.sort((a, b) => new Date(a.startDateTime) - new Date(b.startDateTime));
     }
 
     // Legacy function for backward compatibility
@@ -578,28 +595,74 @@
       const [showEditMeetingModal, setShowEditMeetingModal] = useState(false);
       const [showSettingsModal, setShowSettingsModal] = useState(false);
       const [isLoading, setIsLoading] = useState(true);
+      const [isRegenerating, setIsRegenerating] = useState(false);
+      const isInitializing = React.useRef(false);
 
       // Load meetings from Firestore on mount
       useEffect(() => {
-        const unsubscribe = db.collection('meetings').onSnapshot(snapshot => {
-          if (snapshot.empty) {
-            // No meetings in database, generate defaults
-            const defaultMeetings = generateMeetingsFor2026();
-            defaultMeetings.forEach(meeting => {
-              db.collection('meetings').add(meeting);
+        let hasDeduped = false;
+        
+        const unsubscribe = db.collection('meetings').onSnapshot(async snapshot => {
+          if (snapshot.empty && !isRegenerating && !isInitializing.current) {
+            isInitializing.current = true;
+            console.log('No meetings found, generating initial set...');
+            
+            // Load settings and generate
+            const settingsDoc = await db.collection('settings').doc('meetingSettings').get();
+            const settings = settingsDoc.exists ? settingsDoc.data() : {};
+            
+            const defaultMeetings = generateMeetingsFromSettings(settings);
+            console.log('Generated initial meetings:', defaultMeetings.length);
+            
+            // Add all in one go
+            const addOps = defaultMeetings.map(meeting => {
+              const { id, ...meetingData } = meeting;
+              return db.collection('meetings').add(meetingData);
             });
-          } else {
+            await Promise.all(addOps);
+            console.log('Initial meetings added to database');
+            
+            isInitializing.current = false;
+          } else if (!snapshot.empty) {
             const loadedMeetings = snapshot.docs.map(doc => ({
               id: doc.id,
               ...doc.data()
             }));
+            
+            // One-time deduplication check on first load
+            if (!hasDeduped) {
+              hasDeduped = true;
+              const seenDateTimes = new Map();
+              const duplicateIds = [];
+              
+              loadedMeetings.forEach(meeting => {
+                const key = meeting.startDateTime;
+                if (seenDateTimes.has(key)) {
+                  duplicateIds.push(meeting.id);
+                } else {
+                  seenDateTimes.set(key, meeting.id);
+                }
+              });
+              
+              // Delete duplicates if found
+              if (duplicateIds.length > 0) {
+                console.log('Found duplicates, cleaning up:', duplicateIds.length);
+                const cleanupBatch = db.batch();
+                duplicateIds.forEach(id => {
+                  cleanupBatch.delete(db.collection('meetings').doc(id));
+                });
+                await cleanupBatch.commit();
+                return; // Let the snapshot fire again with clean data
+              }
+            }
+            
             setMeetings(loadedMeetings.sort((a, b) => new Date(a.startDateTime) - new Date(b.startDateTime)));
             setIsLoading(false);
           }
         });
         
         return () => unsubscribe();
-      }, []);
+      }, [isRegenerating]);
 
       // Load topics from Firestore on mount
       useEffect(() => {
@@ -642,7 +705,12 @@
       };
 
       const updateMeeting = async (meetingId, updates) => {
-        await db.collection('meetings').doc(meetingId).update(updates);
+        try {
+          await db.collection('meetings').doc(meetingId).update(updates);
+        } catch (error) {
+          console.error('Error updating meeting:', error);
+          alert('Error updating meeting. Please try again.');
+        }
       };
 
       if (isLoading) {
@@ -661,6 +729,7 @@
             onSelectMeeting={setSelectedMeetingId}
             onUpdateMeeting={updateMeeting}
             onOpenSettings={() => setShowSettingsModal(true)}
+            isRegenerating={isRegenerating}
           />
           <Main 
             meeting={selectedMeeting}
@@ -689,27 +758,59 @@
             <SettingsModal
               onClose={() => setShowSettingsModal(false)}
               onSave={async (settings) => {
-                // Save settings to Firestore
-                await db.collection('settings').doc('meetingSettings').set(settings);
-                
-                // Delete all existing meetings
-                const meetingsSnapshot = await db.collection('meetings').get();
-                const batch = db.batch();
-                meetingsSnapshot.docs.forEach(doc => {
-                  batch.delete(doc.ref);
-                });
-                await batch.commit();
-                
-                // Generate and save new meetings
-                const newMeetings = generateMeetingsFromSettings(settings);
-                const addBatch = db.batch();
-                newMeetings.forEach(meeting => {
-                  const docRef = db.collection('meetings').doc();
-                  addBatch.set(docRef, meeting);
-                });
-                await addBatch.commit();
-                
-                setShowSettingsModal(false);
+                try {
+                  // Disable the modal and show loading
+                  setIsRegenerating(true);
+                  setIsLoading(true);
+                  setShowSettingsModal(false); // Close modal immediately
+                  
+                  // Save settings to Firestore first
+                  await db.collection('settings').doc('meetingSettings').set(settings);
+                  
+                  // Generate new meetings FIRST (before deleting old ones)
+                  const newMeetings = generateMeetingsFromSettings(settings);
+                  console.log('Generated new meetings:', newMeetings.length);
+                  
+                  // Get all existing meetings
+                  const meetingsSnapshot = await db.collection('meetings').get();
+                  console.log('Existing meetings in DB:', meetingsSnapshot.docs.length);
+                  
+                  // Use a single large batch operation to delete all and add all
+                  // This makes it more atomic
+                  const allOps = [];
+                  
+                  // Add all deletions
+                  meetingsSnapshot.docs.forEach(doc => {
+                    allOps.push(db.collection('meetings').doc(doc.id).delete());
+                  });
+                  
+                  // Wait for all deletions to complete
+                  await Promise.all(allOps);
+                  console.log('Deleted all old meetings');
+                  
+                  // Small delay to ensure Firestore has processed deletions
+                  await new Promise(resolve => setTimeout(resolve, 300));
+                  
+                  // Now add all new meetings
+                  const addOps = [];
+                  newMeetings.forEach(meeting => {
+                    const { id, ...meetingData } = meeting;
+                    addOps.push(db.collection('meetings').add(meetingData));
+                  });
+                  
+                  await Promise.all(addOps);
+                  console.log('Added all new meetings');
+                  
+                  // Clear both loading flags - the snapshot will fire with new data
+                  setIsRegenerating(false);
+                  setIsLoading(false);
+                } catch (error) {
+                  console.error('Error saving settings:', error);
+                  alert('Error saving settings: ' + error.message);
+                  setIsLoading(false);
+                  setIsRegenerating(false);
+                  setShowSettingsModal(true); // Reopen modal on error
+                }
               }}
             />
           )}
@@ -717,7 +818,7 @@
       );
     }
 
-    function Sidebar({ meetings, selectedMeetingId, onSelectMeeting, onUpdateMeeting, onOpenSettings }) {
+    function Sidebar({ meetings, selectedMeetingId, onSelectMeeting, onUpdateMeeting, onOpenSettings, isRegenerating }) {
       const now = new Date();
       const [editingMeetingId, setEditingMeetingId] = React.useState(null);
       const [showPastMeetings, setShowPastMeetings] = React.useState(false);
@@ -725,11 +826,13 @@
 
       // Load series name from Firestore
       React.useEffect(() => {
-        db.collection('settings').doc('meetingSettings').get().then(doc => {
-          if (doc.exists) {
-            setSeriesName(doc.data().seriesName || 'Design Studio Forum');
+        const unsubscribe = db.collection('settings').doc('meetingSettings').onSnapshot(doc => {
+          if (doc.exists && doc.data().seriesName) {
+            setSeriesName(doc.data().seriesName);
           }
         });
+        
+        return () => unsubscribe();
       }, []);
 
       const futureMeetings = meetings.filter(m => new Date(m.startDateTime) >= now);
@@ -764,6 +867,25 @@
             </button>
           </div>
           
+          {isRegenerating ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 20px' }}>
+              <div style={{
+                width: '32px',
+                height: '32px',
+                border: '3px solid #e0e0e0',
+                borderTop: '3px solid #333',
+                borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite'
+              }}></div>
+              <style>{`
+                @keyframes spin {
+                  0% { transform: rotate(0deg); }
+                  100% { transform: rotate(360deg); }
+                }
+              `}</style>
+            </div>
+          ) : (
+            <>
           {futureMeetings.map(meeting => {
             const start = new Date(meeting.startDateTime);
 
@@ -828,7 +950,7 @@
             </>
           )}
 
-          {editingMeetingId && (
+          {editingMeetingId && meetings.find(m => m.id === editingMeetingId) && (
             <EditMeetingModal
               meeting={meetings.find(m => m.id === editingMeetingId)}
               onClose={() => setEditingMeetingId(null)}
@@ -838,6 +960,8 @@
               }}
             />
           )}
+        </>
+      )}
         </div>
       );
     }
@@ -1289,7 +1413,7 @@
         newDate.setHours(0, 0, 0, 0);
         setSelectedDate(newDate);
         onChange(newDate);
-        onClose();
+        // Parent component handles closing via setShowStartDatePicker/setShowEndDatePicker
       };
 
       return (
@@ -1371,10 +1495,18 @@
 
       const [showStartDatePicker, setShowStartDatePicker] = useState(false);
       const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+      const [isSaving, setIsSaving] = useState(false);
 
-      const handleSubmit = (e) => {
+      const handleSubmit = async (e) => {
         e.preventDefault();
-        onSave(formData);
+        setIsSaving(true);
+        try {
+          await onSave(formData);
+        } catch (error) {
+          console.error('Save error:', error);
+        } finally {
+          setIsSaving(false);
+        }
       };
 
       const toggleDayOfWeek = (day) => {
@@ -1658,8 +1790,10 @@
               </div>
 
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '32px' }}>
-                <button type="button" onClick={onClose} style={{ padding: '12px 24px', background: '#fff', color: '#333', border: '1px solid #e0e0e0', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>Cancel</button>
-                <button type="submit" style={{ padding: '12px 24px', background: '#333', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>Save Changes</button>
+                <button type="button" onClick={onClose} disabled={isSaving} style={{ padding: '12px 24px', background: '#fff', color: '#333', border: '1px solid #e0e0e0', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>Cancel</button>
+                <button type="submit" disabled={isSaving} style={{ padding: '12px 24px', background: '#333', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>
+                  {isSaving ? 'Saving...' : 'Save Changes'}
+                </button>
               </div>
             </form>
           </div>
@@ -1670,6 +1804,20 @@
 
 
     function EditMeetingModal({ meeting, onClose, onSave }) {
+      console.log('EditMeetingModal rendered with meeting:', meeting);
+      
+      if (!meeting) {
+        console.error('EditMeetingModal: meeting is null/undefined');
+        onClose(); // Auto-close if no meeting
+        return null;
+      }
+      
+      if (!meeting.startDateTime || !meeting.endDateTime) {
+        console.error('EditMeetingModal: meeting missing required fields', meeting);
+        onClose(); // Auto-close if invalid meeting
+        return null;
+      }
+      
       const [startDateTime, setStartDateTime] = useState(meeting.startDateTime);
       const [endDateTime, setEndDateTime] = useState(meeting.endDateTime);
       const [showStartPicker, setShowStartPicker] = useState(false);
@@ -1775,7 +1923,7 @@
                 </div>
               </div>
 
-              <div className="modal-actions">
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '32px' }}>
                 <button type="button" className="secondary" onClick={onClose}>Cancel</button>
                 <button type="submit">Save Changes</button>
               </div>
