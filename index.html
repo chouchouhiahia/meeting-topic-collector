@@ -399,6 +399,15 @@
       color: #fff;
     }
 
+    /* Native vs Custom Date Picker Toggle */
+    .native-date-input {
+      display: none;
+    }
+
+    .custom-date-button {
+      display: flex;
+    }
+
     /* Mobile Responsive Styles */
     @media (max-width: 768px) {
       .app {
@@ -532,27 +541,17 @@
 
       /* Mobile calendar picker fix - use native inputs */
       .native-date-input {
-        display: none;
+        display: block !important;
       }
 
       .custom-date-button {
-        display: flex;
+        display: none !important;
       }
 
-      @media (max-width: 768px) {
-        .native-date-input {
-          display: block !important;
-        }
-
-        .custom-date-button {
-          display: none !important;
-        }
-
-        /* Hide custom calendar picker on mobile */
-        .settings-modal div[style*="position: 'absolute'"][style*="zIndex: 1001"],
-        .modal div[style*="position: 'absolute'"][style*="zIndex: 1001"] {
-          display: none !important;
-        }
+      /* Hide custom calendar picker on mobile */
+      .settings-modal div[style*="position: 'absolute'"][style*="zIndex: 1001"],
+      .modal div[style*="position: 'absolute'"][style*="zIndex: 1001"] {
+        display: none !important;
       }
 
       /* Day selector container - center and wrap */
